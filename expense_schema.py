@@ -1,8 +1,9 @@
-from sqlalchemy import Date, DateTime, Float, Integer, Text
+from sqlalchemy import Date, DateTime, Integer, Text, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+from decimal import Decimal
 
 class ExpenseTracker(Base):
     __tablename__ = "expenses"
@@ -18,8 +19,8 @@ class ExpenseTracker(Base):
         nullable=False
     )
 
-    amount: Mapped[float] = mapped_column(
-        Float,
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(12,2),
         nullable=False
     )
 
