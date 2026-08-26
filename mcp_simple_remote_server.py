@@ -31,7 +31,7 @@ if __name__ == "__main__":
     mcp.run(transport='http', host = "0.0.0.0" , port = 8000)
 
 
-#  Commands to Interact with Remote Server
-# to start the server : uv run python mcp_simple_remote_server.py (do not use fastmcp run as it ignores __name__ section)
+# Commands to interact with the remote server
+# To start the server: uv run python mcp_simple_remote_server.py (fastmcp run does not execute the __main__ block)
 # to validate with inspector : npx -y @modelcontextprotocol/inspector@2.1.0 --server-url http://127.0.0.1:8000/mcp --transport http (make sure to provide the exact port)
-#  do not use fastmcp run as it will ignore __name__ block code and initialize the code with stdio. But even if you want to do it make sure explicitly mention transport and port in the command
+# If using fastmcp run, explicitly specify the transport and port: fastmcp run mcp_simple_remote_server.py --transport http --port 8000
