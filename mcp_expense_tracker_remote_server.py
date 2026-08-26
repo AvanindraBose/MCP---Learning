@@ -1,6 +1,6 @@
 import os
-import asyncio
 import json
+from contextlib import asynccontextmanager
 from datetime import date
 from fastmcp import FastMCP
 from sqlalchemy import func, select
@@ -18,14 +18,16 @@ ExpenseDate = Annotated[
     ),
 ]
 
-mcp = FastMCP("ExpenseTracker")
+@asynccontextmanager
+async def app_lifespan(server):
+    await create_tables()
+    yield
 
-# ******************************** Server ***********************************
 async def create_tables():
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 
-asyncio.run(create_tables())
+mcp = FastMCP("ExpenseTracker", lifespan=app_lifespan)
 
 @mcp.tool()
 async def add_expense(
@@ -133,7 +135,7 @@ def _parse_date_range(start_date: str, end_date: str) -> tuple[date, date]:
 def _expense_to_dict(expense: ExpenseTracker):
     return {
         "id": expense.id,
-        "date": expense.date.isoformat(),
+        "date": expense.expense_date.isoformat(),
         "amount": expense.amount,
         "category": expense.category,
         "subcategory": expense.subcategory,
