@@ -1,75 +1,88 @@
-from fastmcp import FastMCP
 import os
-import sqlite3
+import asyncio
+from datetime import date
+from fastmcp import FastMCP
+from sqlalchemy import func, select
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
+from database import AsyncSessionLocal, Base, engine
+from expense_schema import ExpenseTracker
+
 CATEGORIES_PATH = os.path.join(os.path.dirname(__file__), "categories.json")
 
 mcp = FastMCP("ExpenseTracker")
 
-def init_db():
-    with sqlite3.connect(DB_PATH) as c:
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS expenses(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT NOT NULL,
-                amount REAL NOT NULL,
-                category TEXT NOT NULL,
-                subcategory TEXT DEFAULT '',
-                note TEXT DEFAULT ''
-            )
-        """)
+# ******************************** Server ***********************************
+async def create_tables():
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
 
-init_db()
+asyncio.run(create_tables())
 
 @mcp.tool()
-def add_expense(date, amount, category, subcategory="", note=""):
-    '''Add a new expense entry to the database.'''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
-            "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
-            (date, amount, category, subcategory, note)
+async def add_expense(date: date, amount: float, category: str, subcategory: str = "", note: str = ""):
+    """Add a new expense entry.
+
+    Args:
+        date: Date when the expense occurred, in YYYY-MM-DD format.
+        amount: Expense amount.
+        category: Expense category.
+        subcategory: Optional expense subcategory.
+        note: Optional note about the expense.
+    """
+    async with AsyncSessionLocal() as db:
+        expense = ExpenseTracker(
+            date=date,
+            amount=amount,
+            category=category,
+            subcategory=subcategory,
+            note=note,
         )
-        return {"status": "ok", "id": cur.lastrowid}
+        db.add(expense)
+        await db.commit()
+        await db.refresh(expense)
+        return {"status": "ok", "id": expense.id}
     
 @mcp.tool()
-def list_expenses(start_date, end_date):
+async def list_expenses(start_date: date, end_date: date):
     '''List expense entries within an inclusive date range.'''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
-            """
-            SELECT id, date, amount, category, subcategory, note
-            FROM expenses
-            WHERE date BETWEEN ? AND ?
-            ORDER BY id ASC
-            """,
-            (start_date, end_date)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ExpenseTracker)
+            .where(ExpenseTracker.date.between(start_date, end_date))
+            .order_by(ExpenseTracker.id.asc())
         )
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        return [_expense_to_dict(expense) for expense in result.scalars()]
 
 @mcp.tool()
-def summarize(start_date, end_date, category=None):
+async def summarize(start_date: date, end_date: date, category: str | None = None):
     '''Summarize expenses by category within an inclusive date range.'''
-    with sqlite3.connect(DB_PATH) as c:
-        query = (
-            """
-            SELECT category, SUM(amount) AS total_amount
-            FROM expenses
-            WHERE date BETWEEN ? AND ?
-            """
-        )
-        params = [start_date, end_date]
+    async with AsyncSessionLocal() as db:
+        query = select(
+            ExpenseTracker.category,
+            func.sum(ExpenseTracker.amount).label("total_amount"),
+        ).where(ExpenseTracker.date.between(start_date, end_date))
 
         if category:
-            query += " AND category = ?"
-            params.append(category)
+            query = query.where(ExpenseTracker.category == category)
 
-        query += " GROUP BY category ORDER BY category ASC"
+        result = await db.execute(
+            query.group_by(ExpenseTracker.category).order_by(ExpenseTracker.category.asc())
+        )
 
-        cur = c.execute(query, params)
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        return [
+            {"category": expense_category, "total_amount": total_amount}
+            for expense_category, total_amount in result.all()
+        ]
+
+def _expense_to_dict(expense: ExpenseTracker):
+    return {
+        "id": expense.id,
+        "date": expense.date.isoformat(),
+        "amount": expense.amount,
+        "category": expense.category,
+        "subcategory": expense.subcategory,
+        "note": expense.note,
+    }
 
 @mcp.resource("expense://categories", mime_type="application/json")
 def categories():
