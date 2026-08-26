@@ -2,6 +2,7 @@ from sqlalchemy import Date, DateTime, Float, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 class ExpenseTracker(Base):
     __tablename__ = "expenses"
@@ -39,6 +40,6 @@ class ExpenseTracker(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Kolkata")),
         nullable=False
     )
