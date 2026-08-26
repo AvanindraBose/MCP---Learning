@@ -1,7 +1,7 @@
 from sqlalchemy import Date, DateTime, Integer, Text, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 
@@ -14,7 +14,7 @@ class ExpenseTracker(Base):
         autoincrement=True
     )
 
-    date: Mapped[datetime.date] = mapped_column(
+    expense_date: Mapped[date] = mapped_column(
         Date,
         nullable=False
     )
